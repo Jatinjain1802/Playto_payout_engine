@@ -65,9 +65,8 @@ services:
           name: playto-redis
           property: connectionString
 
-  - type: web
+  - type: static
     name: playto-frontend
-    env: static
     rootDir: frontend
     buildCommand: "npm ci && npm run build"
     publishPath: dist
