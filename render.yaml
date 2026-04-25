@@ -82,16 +82,17 @@ databases:
   - name: playto-db
     plan: free
 
-# Redis ko top-level 'redises' mein move kiya gaya hai
-redises:
-  - name: playto-redis
-    plan: free
-
 services:
+  # 0. Key Value (Redis-compatible)
+  - type: keyvalue
+    name: playto-redis
+    plan: free
+    ipAllowList: []
+
   # 1. Backend API
   - type: web
     name: playto-backend
-    env: python
+    runtime: python
     rootDir: backend
     buildCommand: "./render_build.sh"
     startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
@@ -101,11 +102,13 @@ services:
           name: playto-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromRedis:
+        fromService:
+          type: keyvalue
           name: playto-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
-        fromRedis:
+        fromService:
+          type: keyvalue
           name: playto-redis
           property: connectionString
       - key: DJANGO_SECRET_KEY
@@ -118,7 +121,7 @@ services:
   # 2. Worker & Beat
   - type: worker
     name: playto-worker
-    env: python
+    runtime: python
     rootDir: backend
     buildCommand: "pip install -r requirements.txt"
     startCommand: "celery -A config worker -l info"
@@ -128,13 +131,14 @@ services:
           name: playto-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromRedis:
+        fromService:
+          type: keyvalue
           name: playto-redis
           property: connectionString
 
   - type: worker
     name: playto-beat
-    env: python
+    runtime: python
     rootDir: backend
     buildCommand: "pip install -r requirements.txt"
     startCommand: "celery -A config beat -l info"
@@ -144,17 +148,18 @@ services:
           name: playto-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromRedis:
+        fromService:
+          type: keyvalue
           name: playto-redis
           property: connectionString
 
-  # 3. Frontend (Back to 'type: web' with 'env: static')
+  # 3. Frontend static site
   - type: web
     name: playto-frontend
-    env: static
+    runtime: static
     rootDir: frontend
     buildCommand: "npm ci && npm run build"
-    publishPath: dist
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
         fromService:
