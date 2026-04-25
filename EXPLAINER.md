@@ -1,4 +1,4 @@
-﻿# EXPLAINER - Playto Payout Engine
+# EXPLAINER - Playto Payout Engine
 
 This file answers the required engineering questions from the assignment.
 
@@ -14,8 +14,7 @@ def calculate_ledger_totals(merchant_id: int) -> dict[str, int]:
                 filter=Q(direction=Transaction.Direction.CREDIT),
                 output_field=BigIntegerField(),
             ),
-            Value(0),
-            output_field=BigIntegerField(),
+            Value(0, output_field=BigIntegerField()),
         ),
         debits=Coalesce(
             Sum(
@@ -23,8 +22,7 @@ def calculate_ledger_totals(merchant_id: int) -> dict[str, int]:
                 filter=Q(direction=Transaction.Direction.DEBIT),
                 output_field=BigIntegerField(),
             ),
-            Value(0),
-            output_field=BigIntegerField(),
+            Value(0, output_field=BigIntegerField()),
         ),
     )
     return {
@@ -43,7 +41,7 @@ def calculate_ledger_totals(merchant_id: int) -> dict[str, int]:
 ### Exact overdraft-prevention code
 ```python
 with transaction.atomic():
-    merchant = Merchant.objects.select_for_update().get(id=merchant_id)
+    merchant = Merchant.objects.select_for_update(nowait=True).get(id=merchant_id)
     idempotency_record = (
         IdempotencyRecord.objects.select_for_update()
         .filter(merchant=merchant, key=idempotency_key)
@@ -87,10 +85,10 @@ When the second request arrives with same merchant + key:
 ```python
 def transition_to(self, target_status: str) -> None:
     allowed_transitions = {
-        self.Status.PENDING: {self.Status.PROCESSING},
-        self.Status.PROCESSING: {self.Status.COMPLETED, self.Status.FAILED},
-        self.Status.COMPLETED: set(),
-        self.Status.FAILED: set(),
+        self.Status.PENDING: [self.Status.PROCESSING],
+        self.Status.PROCESSING: [self.Status.COMPLETED, self.Status.FAILED],
+        self.Status.COMPLETED: [],
+        self.Status.FAILED: [],
     }
     if target_status == self.status:
         return

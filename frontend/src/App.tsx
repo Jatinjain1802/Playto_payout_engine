@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -18,7 +18,7 @@ import { payoutService } from './services/api';
 import type { Merchant, MerchantBalance, Payout, Transaction } from './types';
 import { cn, formatPaiseToINR } from './utils';
 
-const AUTO_REFRESH_MS = 5000;
+const AUTO_REFRESH_MS = 3000;
 
 function App() {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
