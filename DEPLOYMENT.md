@@ -1,4 +1,4 @@
-﻿# Deployment Guide
+# Deployment Guide
 
 This guide uses Render because it supports web, worker, beat, Redis, and PostgreSQL in one place.
 
@@ -10,7 +10,7 @@ Create a new **Web Service** from this repo.
   ```bash
   pip install -r requirements.txt
   python manage.py migrate
-  python manage.py seed_data
+  python manage.py seed
   ```
 - Start command:
   ```bash
@@ -91,7 +91,7 @@ Create a **Static Site** from this repo.
 ## Optional: one-time seed rerun
 If needed, run in backend shell:
 ```bash
-python manage.py seed_data
+python manage.py seed
 ```
 
 Seed command is idempotent by `seed:<email>` reference checks.

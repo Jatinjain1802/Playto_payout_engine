@@ -1,4 +1,4 @@
-﻿# Backend - Playto Payout Engine
+# Backend - Playto Payout Engine
 
 Django + DRF + Celery backend for the payout engine.
 
@@ -18,7 +18,7 @@ python -m venv venv
 pip install -r requirements.txt
 copy .env.example .env
 python manage.py migrate
-python manage.py seed_data
+python manage.py seed
 ```
 
 ## Run API
