@@ -6,7 +6,8 @@ from django.http import Http404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from payouts.models import Merchant, Payout, Transaction
+from ledger.models import Merchant, Transaction
+from payouts.models import Payout
 from payouts.serializers import (
     MerchantBalanceSerializer,
     MerchantReadSerializer,
@@ -95,6 +96,21 @@ class MerchantPayoutsAPIView(APIView):
     def get(self, request, merchant_id: int):
         payouts = Payout.objects.filter(merchant_id=merchant_id).order_by("-created_at")
         serializer = PayoutReadSerializer(payouts, many=True)
+        return Response(serializer.data)
+
+
+class MerchantBankAccountsAPIView(APIView):
+    def get(self, request, merchant_id: int):
+        from ledger.models import BankAccount
+        from rest_framework import serializers
+
+        class BankAccountSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = BankAccount
+                fields = ["id", "account_number", "ifsc", "is_primary"]
+
+        accounts = BankAccount.objects.filter(merchant_id=merchant_id)
+        serializer = BankAccountSerializer(accounts, many=True)
         return Response(serializer.data)
 
 

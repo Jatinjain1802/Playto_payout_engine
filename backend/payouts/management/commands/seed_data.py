@@ -1,13 +1,8 @@
-from __future__ import annotations
-
 from django.core.management.base import BaseCommand
-
-from payouts.models import Merchant, Transaction
-from payouts.services import update_cached_balance
-
+from ledger.models import Merchant, BankAccount, Transaction
 
 class Command(BaseCommand):
-    help = "Seed 3 merchants with initial credit ledger entries."
+    help = "Seed 3 merchants with initial credit ledger entries and bank accounts."
 
     def handle(self, *args, **options):
         seed_merchants = [
@@ -23,20 +18,26 @@ class Command(BaseCommand):
             )
             if created:
                 self.stdout.write(self.style.SUCCESS(f"Created merchant: {email}"))
+                # Create primary bank account
+                BankAccount.objects.create(
+                    merchant=merchant,
+                    account_number="1234567890",
+                    ifsc="HDFC0001234",
+                    is_primary=True
+                )
+                self.stdout.write(f"Created primary bank account for {email}")
 
             seed_reference = f"seed:{email}"
             already_seeded = Transaction.objects.filter(
                 merchant=merchant,
-                reference_type=Transaction.ReferenceType.SEED,
-                reference_id=seed_reference,
+                description="Initial seeded ledger credit.",
             ).exists()
+            
             if not already_seeded:
                 Transaction.objects.create(
                     merchant=merchant,
                     direction=Transaction.Direction.CREDIT,
                     amount_paise=amount_paise,
-                    reference_type=Transaction.ReferenceType.SEED,
-                    reference_id=seed_reference,
                     description="Initial seeded ledger credit.",
                 )
                 self.stdout.write(
@@ -44,8 +45,3 @@ class Command(BaseCommand):
                         f"Seeded INR {(amount_paise / 100):.2f} for merchant {email}"
                     )
                 )
-
-            balance = update_cached_balance(merchant.id)
-            self.stdout.write(
-                f"Merchant {email} cached_balance_paise updated to {balance}"
-            )

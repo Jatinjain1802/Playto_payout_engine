@@ -7,6 +7,7 @@ import type {
   Transaction,
   TransferCreateRequest,
   TransferResponse,
+  BankAccount,
 } from '../types';
 
 const API_BASE_URL =
@@ -38,6 +39,11 @@ export const payoutService = {
 
   getMerchantPayouts: async (merchantId: number) => {
     const response = await api.get<Payout[]>(`/merchants/${merchantId}/payouts`);
+    return response.data;
+  },
+  
+  getMerchantBankAccounts: async (merchantId: number) => {
+    const response = await api.get<BankAccount[]>(`/merchants/${merchantId}/bank-accounts`);
     return response.data;
   },
 

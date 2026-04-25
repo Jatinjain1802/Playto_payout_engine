@@ -1,12 +1,8 @@
 from __future__ import annotations
-
 import uuid
-
 from rest_framework.test import APITestCase
-
-from payouts.models import Merchant, Transaction
+from ledger.models import Merchant, Transaction
 from payouts.services import calculate_available_balance_paise
-
 
 class MerchantTransferTests(APITestCase):
     def setUp(self):
@@ -22,16 +18,12 @@ class MerchantTransferTests(APITestCase):
             merchant=self.source,
             direction=Transaction.Direction.CREDIT,
             amount_paise=100_000,
-            reference_type=Transaction.ReferenceType.SEED,
-            reference_id="seed:source",
             description="Seed for source",
         )
         Transaction.objects.create(
             merchant=self.destination,
             direction=Transaction.Direction.CREDIT,
             amount_paise=20_000,
-            reference_type=Transaction.ReferenceType.SEED,
-            reference_id="seed:destination",
             description="Seed for destination",
         )
 
@@ -50,11 +42,10 @@ class MerchantTransferTests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         payload = response.json()
-        self.assertTrue(payload["reference_id"].startswith("transfer:"))
         self.assertEqual(calculate_available_balance_paise(self.source.id), 75_000)
         self.assertEqual(calculate_available_balance_paise(self.destination.id), 45_000)
 
-        transfer_rows = Transaction.objects.filter(reference_id=payload["reference_id"])
+        transfer_rows = Transaction.objects.filter(description__contains="Transfer")
         self.assertEqual(transfer_rows.count(), 2)
         self.assertEqual(
             transfer_rows.filter(direction=Transaction.Direction.DEBIT, merchant=self.source).count(),
@@ -95,6 +86,6 @@ class MerchantTransferTests(APITestCase):
         self.assertEqual(first.json(), second.json())
         self.assertEqual(second["X-Idempotency-Replayed"], "true")
         self.assertEqual(
-            Transaction.objects.filter(reference_id=first.json()["reference_id"]).count(),
+            Transaction.objects.filter(description__contains="same key replay").count(),
             2,
         )

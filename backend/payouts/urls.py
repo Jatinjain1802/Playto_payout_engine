@@ -1,15 +1,14 @@
 from django.urls import path
-
 from payouts.views import (
     MerchantBalanceAPIView,
     MerchantListAPIView,
     MerchantPayoutsAPIView,
     MerchantTransactionsAPIView,
+    MerchantBankAccountsAPIView,
     PayoutCreateAPIView,
     PayoutDetailAPIView,
     TransferCreateAPIView,
 )
-
 
 urlpatterns = [
     path("merchants", MerchantListAPIView.as_view(), name="merchant-list"),
@@ -30,5 +29,10 @@ urlpatterns = [
         "merchants/<int:merchant_id>/payouts",
         MerchantPayoutsAPIView.as_view(),
         name="merchant-payouts",
+    ),
+    path(
+        "merchants/<int:merchant_id>/bank-accounts",
+        MerchantBankAccountsAPIView.as_view(),
+        name="merchant-bank-accounts",
     ),
 ]

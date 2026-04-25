@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import hashlib
 import json
 import uuid
@@ -8,13 +7,13 @@ from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
-from django.db import transaction
+from django.db import transaction, OperationalError
 from django.db.models import BigIntegerField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from payouts.models import IdempotencyRecord, Merchant, Payout, Transaction
-
+from ledger.models import Merchant, BankAccount, Transaction
+from payouts.models import IdempotencyRecord, Payout
 
 @dataclass(frozen=True)
 class PayoutCreateResult:
@@ -22,19 +21,17 @@ class PayoutCreateResult:
     payload: dict[str, Any]
     replayed: bool = False
 
-
 @dataclass(frozen=True)
 class TransferCreateResult:
     status_code: int
     payload: dict[str, Any]
     replayed: bool = False
 
-
 def build_request_fingerprint(
     *,
     merchant_id: int,
     amount_paise: int,
-    bank_account_id: str,
+    bank_account_id: int,
 ) -> str:
     payload = {
         "merchant_id": merchant_id,
@@ -43,7 +40,6 @@ def build_request_fingerprint(
     }
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-
 
 def build_transfer_request_fingerprint(
     *,
@@ -61,7 +57,6 @@ def build_transfer_request_fingerprint(
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
-
 def calculate_ledger_totals(merchant_id: int) -> dict[str, int]:
     totals = Transaction.objects.filter(merchant_id=merchant_id).aggregate(
         credits=Coalesce(
@@ -70,8 +65,7 @@ def calculate_ledger_totals(merchant_id: int) -> dict[str, int]:
                 filter=Q(direction=Transaction.Direction.CREDIT),
                 output_field=BigIntegerField(),
             ),
-            Value(0),
-            output_field=BigIntegerField(),
+            Value(0, output_field=BigIntegerField()),
         ),
         debits=Coalesce(
             Sum(
@@ -79,36 +73,26 @@ def calculate_ledger_totals(merchant_id: int) -> dict[str, int]:
                 filter=Q(direction=Transaction.Direction.DEBIT),
                 output_field=BigIntegerField(),
             ),
-            Value(0),
-            output_field=BigIntegerField(),
+            Value(0, output_field=BigIntegerField()),
         ),
     )
     return {
-        "credits": int(totals["credits"] or 0),
-        "debits": int(totals["debits"] or 0),
+        "credits": int(totals["credits"]),
+        "debits": int(totals["debits"]),
     }
-
 
 def calculate_available_balance_paise(merchant_id: int) -> int:
     totals = calculate_ledger_totals(merchant_id)
     return totals["credits"] - totals["debits"]
-
 
 def calculate_held_balance_paise(merchant_id: int) -> int:
     held = Payout.objects.filter(
         merchant_id=merchant_id,
         status__in=[Payout.Status.PENDING, Payout.Status.PROCESSING],
     ).aggregate(
-        total=Coalesce(Sum("amount_paise", output_field=BigIntegerField()), Value(0))
+        total=Coalesce(Sum("amount_paise", output_field=BigIntegerField()), Value(0, output_field=BigIntegerField()))
     )["total"]
-    return int(held or 0)
-
-
-def update_cached_balance(merchant_id: int) -> int:
-    balance = calculate_available_balance_paise(merchant_id)
-    Merchant.objects.filter(id=merchant_id).update(cached_balance_paise=balance)
-    return balance
-
+    return int(held)
 
 def serialize_payout(payout: Payout, available_balance_paise: int) -> dict[str, Any]:
     return {
@@ -123,47 +107,35 @@ def serialize_payout(payout: Payout, available_balance_paise: int) -> dict[str, 
         "available_balance_paise": available_balance_paise,
     }
 
-
 def create_payout(
     *,
     merchant_id: int,
     amount_paise: int,
-    bank_account_id: str,
+    bank_account_id: int,
     idempotency_key: uuid.UUID,
 ) -> PayoutCreateResult:
     if amount_paise <= 0:
-        return PayoutCreateResult(
-            status_code=400,
-            payload={"detail": "amount_paise must be greater than 0."},
-        )
-    if not bank_account_id.strip():
-        return PayoutCreateResult(
-            status_code=400,
-            payload={"detail": "bank_account_id is required."},
-        )
+        return PayoutCreateResult(status_code=400, payload={"detail": "amount_paise must be > 0"})
 
     now = timezone.now()
     idempotency_ttl = timedelta(hours=settings.IDEMPOTENCY_TTL_HOURS)
     fingerprint = build_request_fingerprint(
         merchant_id=merchant_id,
         amount_paise=amount_paise,
-        bank_account_id=bank_account_id.strip(),
+        bank_account_id=bank_account_id,
     )
-    created_payout_id: uuid.UUID | None = None
 
     with transaction.atomic():
         try:
-            merchant = Merchant.objects.select_for_update().get(id=merchant_id)
+            merchant = Merchant.objects.select_for_update(nowait=True).get(id=merchant_id)
         except Merchant.DoesNotExist:
-            return PayoutCreateResult(
-                status_code=404,
-                payload={"detail": "Merchant not found."},
-            )
-        idempotency_record = (
-            IdempotencyRecord.objects.select_for_update()
-            .filter(merchant=merchant, key=idempotency_key)
-            .first()
-        )
+            return PayoutCreateResult(status_code=404, payload={"detail": "Merchant not found"})
+        except OperationalError:
+            return PayoutCreateResult(status_code=409, payload={"detail": "Concurrent request in progress"})
+
+        idempotency_record = IdempotencyRecord.objects.select_for_update().filter(
+            merchant=merchant, key=idempotency_key
+        ).first()
 
         if idempotency_record:
             if idempotency_record.expires_at <= now:
@@ -171,22 +143,14 @@ def create_payout(
                 idempotency_record = None
             else:
                 if idempotency_record.request_fingerprint != fingerprint:
-                    return PayoutCreateResult(
-                        status_code=409,
-                        payload={
-                            "detail": "Idempotency-Key already used with different payload."
-                        },
-                    )
+                    return PayoutCreateResult(status_code=409, payload={"detail": "Idempotency key mismatch"})
                 if idempotency_record.is_completed:
                     return PayoutCreateResult(
                         status_code=int(idempotency_record.response_status_code),
                         payload=dict(idempotency_record.response_body),
-                        replayed=True,
+                        replayed=True
                     )
-                return PayoutCreateResult(
-                    status_code=409,
-                    payload={"detail": "Request with this Idempotency-Key is in progress."},
-                )
+                return PayoutCreateResult(status_code=409, payload={"detail": "Request in progress"})
 
         if idempotency_record is None:
             idempotency_record = IdempotencyRecord.objects.create(
@@ -198,50 +162,43 @@ def create_payout(
 
         available_balance = calculate_available_balance_paise(merchant.id)
         if available_balance < amount_paise:
-            payload = {
-                "detail": "Insufficient balance.",
-                "available_balance_paise": available_balance,
-            }
+            payload = {"detail": "Insufficient balance", "available_balance_paise": available_balance}
             idempotency_record.response_status_code = 400
             idempotency_record.response_body = payload
-            idempotency_record.save(update_fields=["response_status_code", "response_body"])
+            idempotency_record.save()
             return PayoutCreateResult(status_code=400, payload=payload)
+
+        try:
+            bank_account = BankAccount.objects.get(id=bank_account_id, merchant=merchant)
+        except BankAccount.DoesNotExist:
+            return PayoutCreateResult(status_code=400, payload={"detail": "Invalid bank account"})
 
         payout = Payout.objects.create(
             merchant=merchant,
+            bank_account=bank_account,
             amount_paise=amount_paise,
-            bank_account_id=bank_account_id.strip(),
             idempotency_key=idempotency_key,
             status=Payout.Status.PENDING,
         )
+        
         Transaction.objects.create(
             merchant=merchant,
             direction=Transaction.Direction.DEBIT,
             amount_paise=amount_paise,
-            reference_type=Transaction.ReferenceType.PAYOUT,
-            reference_id=str(payout.id),
-            description="Payout initiated and amount held.",
+            description=f"Hold for payout #{payout.id}",
+            payout=payout,
         )
-        available_after_debit = available_balance - amount_paise
-        merchant.cached_balance_paise = available_after_debit
-        merchant.save(update_fields=["cached_balance_paise", "updated_at"])
 
-        payload = serialize_payout(payout, available_after_debit)
+        payload = serialize_payout(payout, available_balance - amount_paise)
         idempotency_record.response_status_code = 201
         idempotency_record.response_body = payload
         idempotency_record.payout = payout
-        idempotency_record.save(
-            update_fields=["response_status_code", "response_body", "payout"]
-        )
-        created_payout_id = payout.id
+        idempotency_record.save()
 
-    if created_payout_id is not None:
-        from payouts.tasks import process_payout_task
-
-        process_payout_task.delay(str(created_payout_id))
+    from payouts.tasks import process_payout_task
+    process_payout_task.delay(str(payout.id))
 
     return PayoutCreateResult(status_code=201, payload=payload)
-
 
 def create_transfer(
     *,
@@ -251,17 +208,11 @@ def create_transfer(
     idempotency_key: uuid.UUID,
     note: str = "",
 ) -> TransferCreateResult:
-    normalized_note = note.strip()
     if amount_paise <= 0:
-        return TransferCreateResult(
-            status_code=400,
-            payload={"detail": "amount_paise must be greater than 0."},
-        )
+        return TransferCreateResult(status_code=400, payload={"detail": "amount_paise must be > 0"})
+    
     if source_merchant_id == destination_merchant_id:
-        return TransferCreateResult(
-            status_code=400,
-            payload={"detail": "Source and destination merchant must be different."},
-        )
+        return TransferCreateResult(status_code=400, payload={"detail": "Same source and destination"})
 
     now = timezone.now()
     idempotency_ttl = timedelta(hours=settings.IDEMPOTENCY_TTL_HOURS)
@@ -269,30 +220,29 @@ def create_transfer(
         source_merchant_id=source_merchant_id,
         destination_merchant_id=destination_merchant_id,
         amount_paise=amount_paise,
-        note=normalized_note,
+        note=note,
     )
 
     with transaction.atomic():
-        locked_merchants = list(
-            Merchant.objects.select_for_update()
-            .filter(id__in=[source_merchant_id, destination_merchant_id])
-            .order_by("id")
-        )
-        if len(locked_merchants) != 2:
-            return TransferCreateResult(
-                status_code=404,
-                payload={"detail": "Source or destination merchant not found."},
+        try:
+            # Lock both merchants in consistent order to avoid deadlocks
+            locked_merchants = list(
+                Merchant.objects.select_for_update(nowait=True)
+                .filter(id__in=[source_merchant_id, destination_merchant_id])
+                .order_by("id")
             )
+            if len(locked_merchants) != 2:
+                 return TransferCreateResult(status_code=404, payload={"detail": "Merchant(s) not found"})
+        except OperationalError:
+            return TransferCreateResult(status_code=409, payload={"detail": "Concurrent request in progress"})
 
-        merchant_map = {merchant.id: merchant for merchant in locked_merchants}
+        merchant_map = {m.id: m for m in locked_merchants}
         source_merchant = merchant_map[source_merchant_id]
         destination_merchant = merchant_map[destination_merchant_id]
 
-        idempotency_record = (
-            IdempotencyRecord.objects.select_for_update()
-            .filter(merchant=source_merchant, key=idempotency_key)
-            .first()
-        )
+        idempotency_record = IdempotencyRecord.objects.select_for_update().filter(
+            merchant=source_merchant, key=idempotency_key
+        ).first()
 
         if idempotency_record:
             if idempotency_record.expires_at <= now:
@@ -300,22 +250,14 @@ def create_transfer(
                 idempotency_record = None
             else:
                 if idempotency_record.request_fingerprint != fingerprint:
-                    return TransferCreateResult(
-                        status_code=409,
-                        payload={
-                            "detail": "Idempotency-Key already used with different payload."
-                        },
-                    )
+                    return TransferCreateResult(status_code=409, payload={"detail": "Idempotency key mismatch"})
                 if idempotency_record.is_completed:
                     return TransferCreateResult(
                         status_code=int(idempotency_record.response_status_code),
                         payload=dict(idempotency_record.response_body),
-                        replayed=True,
+                        replayed=True
                     )
-                return TransferCreateResult(
-                    status_code=409,
-                    payload={"detail": "Request with this Idempotency-Key is in progress."},
-                )
+                return TransferCreateResult(status_code=409, payload={"detail": "Request in progress"})
 
         if idempotency_record is None:
             idempotency_record = IdempotencyRecord.objects.create(
@@ -325,93 +267,63 @@ def create_transfer(
                 expires_at=now + idempotency_ttl,
             )
 
-        source_available_balance = calculate_available_balance_paise(source_merchant.id)
-        if source_available_balance < amount_paise:
-            payload = {
-                "detail": "Insufficient balance in source merchant account.",
-                "available_balance_paise": source_available_balance,
-            }
+        source_balance = calculate_available_balance_paise(source_merchant.id)
+        if source_balance < amount_paise:
+            payload = {"detail": "Insufficient source balance"}
             idempotency_record.response_status_code = 400
             idempotency_record.response_body = payload
-            idempotency_record.save(update_fields=["response_status_code", "response_body"])
+            idempotency_record.save()
             return TransferCreateResult(status_code=400, payload=payload)
 
-        destination_available_balance = calculate_available_balance_paise(destination_merchant.id)
-        transfer_reference = f"transfer:{uuid.uuid4()}"
-        transfer_note = normalized_note or "Internal merchant transfer"
-
+        # Create both transactions
         Transaction.objects.create(
             merchant=source_merchant,
             direction=Transaction.Direction.DEBIT,
             amount_paise=amount_paise,
-            reference_type=Transaction.ReferenceType.ADJUSTMENT,
-            reference_id=transfer_reference,
-            description=f"{transfer_note} (to merchant #{destination_merchant.id})",
+            description=f"Transfer to merchant #{destination_merchant.id}: {note}",
         )
         Transaction.objects.create(
             merchant=destination_merchant,
             direction=Transaction.Direction.CREDIT,
             amount_paise=amount_paise,
-            reference_type=Transaction.ReferenceType.ADJUSTMENT,
-            reference_id=transfer_reference,
-            description=f"{transfer_note} (from merchant #{source_merchant.id})",
+            description=f"Transfer from merchant #{source_merchant.id}: {note}",
         )
 
-        source_after = source_available_balance - amount_paise
-        destination_after = destination_available_balance + amount_paise
-        source_merchant.cached_balance_paise = source_after
-        destination_merchant.cached_balance_paise = destination_after
-        source_merchant.save(update_fields=["cached_balance_paise", "updated_at"])
-        destination_merchant.save(update_fields=["cached_balance_paise", "updated_at"])
-
         payload = {
-            "reference_id": transfer_reference,
             "source_merchant_id": source_merchant.id,
             "destination_merchant_id": destination_merchant.id,
             "amount_paise": amount_paise,
-            "source_available_balance_paise": source_after,
-            "destination_available_balance_paise": destination_after,
-            "note": normalized_note,
-            "created_at": now.isoformat(),
+            "note": note,
+            "status": "completed"
         }
         idempotency_record.response_status_code = 201
         idempotency_record.response_body = payload
-        idempotency_record.save(update_fields=["response_status_code", "response_body"])
+        idempotency_record.save()
 
     return TransferCreateResult(status_code=201, payload=payload)
-
 
 def mark_payout_completed(payout_id: str) -> None:
     with transaction.atomic():
         payout = Payout.objects.select_for_update().get(id=payout_id)
-        if payout.status in {Payout.Status.COMPLETED, Payout.Status.FAILED}:
-            return
         if payout.status != Payout.Status.PROCESSING:
             return
         payout.transition_to(Payout.Status.COMPLETED)
-        payout.save(update_fields=["status", "updated_at"])
-
+        payout.save()
 
 def mark_payout_failed(payout_id: str, reason: str) -> None:
     with transaction.atomic():
-        payout = Payout.objects.select_for_update().select_related("merchant").get(id=payout_id)
-        merchant = Merchant.objects.select_for_update().get(id=payout.merchant_id)
-        if payout.status in {Payout.Status.COMPLETED, Payout.Status.FAILED}:
-            return
+        payout = Payout.objects.select_for_update().get(id=payout_id)
         if payout.status != Payout.Status.PROCESSING:
             return
         payout.transition_to(Payout.Status.FAILED)
         payout.failure_reason = reason
         if not payout.refunded:
             Transaction.objects.create(
-                merchant=merchant,
+                merchant=payout.merchant,
                 direction=Transaction.Direction.CREDIT,
                 amount_paise=payout.amount_paise,
-                reference_type=Transaction.ReferenceType.REFUND,
-                reference_id=str(payout.id),
-                description="Payout failed, funds refunded.",
+                description=f"Refund for failed payout #{payout.id}",
+                payout=payout,
             )
             payout.refunded = True
-        payout.save(update_fields=["status", "failure_reason", "refunded", "updated_at"])
-        merchant.cached_balance_paise = calculate_available_balance_paise(merchant.id)
-        merchant.save(update_fields=["cached_balance_paise", "updated_at"])
+        payout.save()

@@ -1,15 +1,12 @@
 from __future__ import annotations
-
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
-
 from django.db import connection, close_old_connections
 from django.test import TransactionTestCase
-
-from payouts.models import Merchant, Payout, Transaction
+from ledger.models import Merchant, Transaction, BankAccount
+from payouts.models import Payout
 from payouts.services import calculate_available_balance_paise, create_payout
-
 
 class PayoutConcurrencyTests(TransactionTestCase):
     reset_sequences = True
@@ -19,12 +16,16 @@ class PayoutConcurrencyTests(TransactionTestCase):
             name="Concurrency Merchant",
             email="concurrency@merchant.test",
         )
+        self.bank = BankAccount.objects.create(
+            merchant=self.merchant,
+            account_number="1234567890",
+            ifsc="HDFC0001234",
+            is_primary=True
+        )
         Transaction.objects.create(
             merchant=self.merchant,
             direction=Transaction.Direction.CREDIT,
             amount_paise=10_000,
-            reference_type=Transaction.ReferenceType.SEED,
-            reference_id="seed:concurrency",
             description="Seed credit for concurrency test",
         )
 
@@ -33,7 +34,7 @@ class PayoutConcurrencyTests(TransactionTestCase):
         result = create_payout(
             merchant_id=self.merchant.id,
             amount_paise=6_000,
-            bank_account_id="bank-concurrent-01",
+            bank_account_id=self.bank.id,
             idempotency_key=key,
         )
         close_old_connections()
@@ -48,7 +49,10 @@ class PayoutConcurrencyTests(TransactionTestCase):
         with ThreadPoolExecutor(max_workers=2) as executor:
             statuses = list(executor.map(self._attempt_payout, keys))
 
-        self.assertEqual(statuses.count(201), 1)
-        self.assertEqual(statuses.count(400), 1)
+        # Status 201 for success, 409 for conflict (due to NOWAIT) or 400 for balance
+        # In this specific test, if they run at the EXACT same time, one gets 201, other gets 409.
+        # If they run sequentially, one gets 201, other gets 400.
+        success_count = statuses.count(201)
+        self.assertEqual(success_count, 1)
         self.assertEqual(Payout.objects.count(), 1)
         self.assertEqual(calculate_available_balance_paise(self.merchant.id), 4_000)

@@ -4,7 +4,6 @@ export interface Merchant {
   id: number;
   name: string;
   email: string;
-  cached_balance_paise: number;
 }
 
 export interface MerchantBalance {
@@ -15,11 +14,18 @@ export interface MerchantBalance {
   debits_total_paise: number;
 }
 
+export interface BankAccount {
+  id: number;
+  account_number: string;
+  ifsc: string;
+  is_primary: boolean;
+}
+
 export interface Payout {
   id: string;
   merchant_id: number;
   amount_paise: number;
-  bank_account_id: string;
+  bank_account_id: number;
   status: PayoutStatus;
   idempotency_key: string;
   created_at: string;
@@ -32,7 +38,7 @@ export interface Transaction {
   merchant_id: number;
   amount_paise: number;
   direction: 'credit' | 'debit';
-  reference_type: 'payment' | 'payout' | 'refund' | 'seed' | 'adjustment';
+  reference_type: string;
   reference_id: string;
   description: string;
   created_at: string;
@@ -41,7 +47,7 @@ export interface Transaction {
 export interface PayoutCreateRequest {
   merchant_id: number;
   amount_paise: number;
-  bank_account_id: string;
+  bank_account_id: number;
 }
 
 export interface TransferCreateRequest {

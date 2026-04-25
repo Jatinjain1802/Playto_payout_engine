@@ -1,22 +1,18 @@
 from __future__ import annotations
-
 from rest_framework import serializers
-
-from payouts.models import Merchant, Payout, Transaction
-
+from ledger.models import Merchant, Transaction
+from payouts.models import Payout
 
 class PayoutCreateRequestSerializer(serializers.Serializer):
     merchant_id = serializers.IntegerField(min_value=1)
     amount_paise = serializers.IntegerField(min_value=1)
-    bank_account_id = serializers.CharField(max_length=64)
-
+    bank_account_id = serializers.IntegerField(min_value=1)
 
 class TransferCreateRequestSerializer(serializers.Serializer):
     source_merchant_id = serializers.IntegerField(min_value=1)
     destination_merchant_id = serializers.IntegerField(min_value=1)
     amount_paise = serializers.IntegerField(min_value=1)
     note = serializers.CharField(required=False, allow_blank=True, max_length=255)
-
 
 class PayoutReadSerializer(serializers.ModelSerializer):
     class Meta:
@@ -36,7 +32,6 @@ class PayoutReadSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-
 class MerchantBalanceSerializer(serializers.Serializer):
     merchant_id = serializers.IntegerField()
     available_balance_paise = serializers.IntegerField()
@@ -44,14 +39,15 @@ class MerchantBalanceSerializer(serializers.Serializer):
     credits_total_paise = serializers.IntegerField()
     debits_total_paise = serializers.IntegerField()
 
-
 class MerchantReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Merchant
-        fields = ["id", "name", "email", "cached_balance_paise"]
-
+        fields = ["id", "name", "email"]
 
 class TransactionReadSerializer(serializers.ModelSerializer):
+    reference_type = serializers.CharField(source='direction')
+    reference_id = serializers.SerializerMethodField()
+
     class Meta:
         model = Transaction
         fields = [
@@ -64,3 +60,8 @@ class TransactionReadSerializer(serializers.ModelSerializer):
             "description",
             "created_at",
         ]
+
+    def get_reference_id(self, obj):
+        if obj.payout:
+            return str(obj.payout.id)
+        return ""

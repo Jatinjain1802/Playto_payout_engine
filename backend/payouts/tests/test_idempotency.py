@@ -1,12 +1,9 @@
 from __future__ import annotations
-
 import uuid
 from unittest.mock import patch
-
 from rest_framework.test import APITestCase
-
-from payouts.models import Merchant, Payout, Transaction
-
+from ledger.models import Merchant, Transaction, BankAccount
+from payouts.models import Payout
 
 class PayoutIdempotencyTests(APITestCase):
     def setUp(self):
@@ -14,12 +11,16 @@ class PayoutIdempotencyTests(APITestCase):
             name="Idempotent Merchant",
             email="idempotent@merchant.test",
         )
+        self.bank = BankAccount.objects.create(
+            merchant=self.merchant,
+            account_number="1234567890",
+            ifsc="HDFC0001234",
+            is_primary=True
+        )
         Transaction.objects.create(
             merchant=self.merchant,
             direction=Transaction.Direction.CREDIT,
             amount_paise=10_000,
-            reference_type=Transaction.ReferenceType.SEED,
-            reference_id="seed:idempotent",
             description="Seed credit for idempotency test",
         )
 
@@ -29,7 +30,7 @@ class PayoutIdempotencyTests(APITestCase):
         payload = {
             "merchant_id": self.merchant.id,
             "amount_paise": 4_000,
-            "bank_account_id": "bank-001",
+            "bank_account_id": self.bank.id,
         }
         first = self.client.post(
             "/api/v1/payouts",
@@ -62,7 +63,7 @@ class PayoutIdempotencyTests(APITestCase):
             {
                 "merchant_id": self.merchant.id,
                 "amount_paise": 3_000,
-                "bank_account_id": "bank-001",
+                "bank_account_id": self.bank.id,
             },
             format="json",
             HTTP_IDEMPOTENCY_KEY=str(idempotency_key),
@@ -72,7 +73,7 @@ class PayoutIdempotencyTests(APITestCase):
             {
                 "merchant_id": self.merchant.id,
                 "amount_paise": 3_500,
-                "bank_account_id": "bank-001",
+                "bank_account_id": self.bank.id,
             },
             format="json",
             HTTP_IDEMPOTENCY_KEY=str(idempotency_key),
