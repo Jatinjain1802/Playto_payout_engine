@@ -1,0 +1,105 @@
+services:
+  # 1. PostgreSQL Database
+  - type: database
+    name: playto-db
+    databaseName: playto
+    user: playto
+    plan: free
+
+  # 2. Redis Instance (for Celery)
+  - type: redis
+    name: playto-redis
+    plan: free
+    ipAllowList: [] # Only allow internal connections
+
+  # 3. Backend API (Django)
+  - type: web
+    name: playto-backend
+    env: python
+    buildCommand: "./render_build.sh"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+    rootDir: backend
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        fromContext: instance_host
+      - key: DATABASE_URL
+        fromDatabase:
+          name: playto-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromRedis:
+          name: playto-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromRedis:
+          name: playto-redis
+          property: connectionString
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "False"
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "True" # For initial setup, can be restricted later
+
+  # 4. Celery Worker
+  - type: worker
+    name: playto-worker
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A config worker -l info"
+    rootDir: backend
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: playto-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromRedis:
+          name: playto-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromRedis:
+          name: playto-redis
+          property: connectionString
+
+  # 5. Celery Beat
+  - type: worker
+    name: playto-beat
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A config beat -l info"
+    rootDir: backend
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: playto-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromRedis:
+          name: playto-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromRedis:
+          name: playto-redis
+          property: connectionString
+
+  # 6. Frontend (React)
+  - type: web
+    name: playto-frontend
+    env: static
+    buildCommand: "npm ci && npm run build"
+    publishPath: dist
+    rootDir: frontend
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: playto-backend
+          property: host
+        suffix: /api/v1
