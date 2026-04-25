@@ -83,38 +83,43 @@ export function PayoutForm({ merchantId, availableBalancePaise, onSuccess, onClo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-5">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-md overflow-hidden rounded-[32px] border border-border-bright bg-surface shadow-2xl shadow-black/50 animate-in zoom-in-95 duration-200">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border-dim bg-surface2/50 px-8 py-6">
           <div>
-            <h3 className="text-2xl font-black tracking-tight text-slate-900">Request Payout</h3>
-            <p className="mt-1 text-sm text-slate-500">Merchant #{merchantId}</p>
+            <h3 className="font-head text-xl font-bold text-white">New Payout</h3>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Merchant ID: MER_00{merchantId}</p>
           </div>
-          <button onClick={onClose} className="rounded-full p-2 text-slate-500 transition hover:bg-slate-200">
-            <X className="h-5 w-5" />
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-surface3 text-slate-400 hover:text-white transition-all">
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 p-6">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {success ? (
-            <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-              <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
-              <h4 className="text-xl font-bold text-emerald-900">Payout requested</h4>
-              <p className="text-sm text-emerald-700">Status will update automatically on the dashboard.</p>
+            <div className="space-y-4 py-6 text-center animate-in zoom-in-90">
+              <div className="w-16 h-16 bg-primary-green/10 rounded-full flex items-center justify-center mx-auto border border-primary-green/20">
+                <CheckCircle2 className="h-8 w-8 text-primary-green" />
+              </div>
+              <h4 className="font-head text-lg font-bold text-white">Payout Initiated</h4>
+              <p className="text-xs text-slate-400">Your funds are being processed and will update in the ledger shortly.</p>
             </div>
           ) : (
             <>
               {error && (
-                <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-                  <AlertCircle className="h-5 w-5 shrink-0" />
+                <div className="flex items-start gap-3 rounded-2xl border border-primary-red/20 bg-primary-red/10 p-4 text-xs font-semibold text-primary-red animate-in slide-in-from-top-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
                   <p>{error}</p>
                 </div>
               )}
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Withdrawal Amount (INR)</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold uppercase text-slate-400">INR</span>
+              {/* Amount Input */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Withdrawal Amount</label>
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-sm font-bold text-slate-500">₹</span>
                   <input
                     type="number"
                     step="0.01"
@@ -124,57 +129,68 @@ export function PayoutForm({ merchantId, availableBalancePaise, onSuccess, onClo
                       idempotencyKeyRef.current = crypto.randomUUID();
                     }}
                     placeholder="0.00"
-                    className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-14 pr-4 text-lg font-semibold outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+                    className="w-full h-14 bg-surface2 border border-border-dim rounded-2xl pl-10 pr-4 text-lg font-mono font-bold text-white outline-none transition-all focus:border-primary-blue focus:bg-surface3 placeholder:text-slate-700"
                     required
                   />
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Available: INR {(availableBalancePaise / 100).toFixed(2)}</p>
+                <div className="flex justify-between px-1">
+                  <p className="text-[10px] text-slate-500">Paise: {Math.round(parseFloat(amountInr || '0') * 100)}</p>
+                  <p className="text-[10px] font-bold text-primary-green uppercase tracking-wider">Available: ₹{(availableBalancePaise / 100).toLocaleString()}</p>
+                </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Select Bank Account</label>
+              {/* Bank Selection */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Destination Bank</label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <Landmark className="h-4 w-4" />
-                  </div>
+                  <Landmark className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                   <select
                     value={selectedBankId}
                     onChange={(event) => {
                       setSelectedBankId(Number(event.target.value));
                       idempotencyKeyRef.current = crypto.randomUUID();
                     }}
-                    className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm font-medium outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 appearance-none"
+                    className="w-full h-14 bg-surface2 border border-border-dim rounded-2xl pl-11 pr-4 text-sm font-semibold text-white outline-none transition-all focus:border-primary-blue focus:bg-surface3 appearance-none cursor-pointer"
                     required
                   >
                     <option value="" disabled>Select a bank account</option>
                     {bankAccounts.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.account_number} ({bank.ifsc}) {bank.is_primary ? '• Primary' : ''}
+                      <option key={bank.id} value={bank.id} className="bg-surface text-white">
+                        {bank.account_number.slice(-4).padStart(8, '•')} — {bank.ifsc}
                       </option>
                     ))}
                   </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600 text-xs">▼</div>
                 </div>
+              </div>
+
+              <div className="p-4 bg-surface2 rounded-2xl border border-border-dim space-y-2">
+                 <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest">
+                    <span>Idempotency Key</span>
+                    <RefreshCcw size={10} className="text-slate-700" />
+                 </div>
+                 <p className="font-mono text-[10px] text-slate-400 truncate">{idempotencyKeyRef.current}</p>
               </div>
 
               <button
                 type="submit"
                 disabled={loading || bankAccounts.length === 0}
                 className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3.5 text-base font-bold text-white transition hover:bg-slate-800',
-                  (loading || bankAccounts.length === 0) && 'cursor-not-allowed opacity-70'
+                  'flex w-full h-14 items-center justify-center gap-3 rounded-2xl bg-primary-blue text-sm font-bold text-white transition-all shadow-lg shadow-primary-blue/20 hover:scale-[1.02] active:scale-[0.98]',
+                  (loading || bankAccounts.length === 0) && 'cursor-not-allowed opacity-50 grayscale'
                 )}
               >
                 {loading ? (
                   <RefreshCcw className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    <Send className="h-5 w-5" />
-                    Process Withdrawal
+                    <Send className="h-4 w-4" />
+                    Confirm Payout Request
                   </>
                 )}
               </button>
               {bankAccounts.length === 0 && (
-                <p className="text-center text-xs text-rose-500 font-semibold">No bank accounts found for this merchant.</p>
+                <p className="text-center text-[10px] text-primary-red font-bold uppercase tracking-wider">No bank accounts linked.</p>
               )}
             </>
           )}

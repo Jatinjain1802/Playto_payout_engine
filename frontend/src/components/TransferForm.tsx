@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { ArrowRightLeft, AlertCircle, CheckCircle2, RefreshCcw, X } from 'lucide-react';
+import { ArrowRightLeft, AlertCircle, CheckCircle2, RefreshCcw, X, Building2 } from 'lucide-react';
 import { payoutService } from '../services/api';
 import type { Merchant } from '../types';
 import { cn } from '../utils';
@@ -85,80 +85,94 @@ export function TransferForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-4">
-      <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-6 py-5">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-xl overflow-hidden rounded-[32px] border border-border-bright bg-surface shadow-2xl shadow-black/50 animate-in zoom-in-95 duration-200">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border-dim bg-surface2/50 px-8 py-6">
           <div>
-            <h3 className="text-2xl font-black tracking-tight text-slate-900">Transfer Between Merchants</h3>
-            <p className="mt-1 text-sm text-slate-500">Move funds from one merchant ledger to another safely.</p>
+            <h3 className="font-head text-xl font-bold text-white">Merchant Transfer</h3>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Inter-merchant ledger move</p>
           </div>
-          <button onClick={onClose} className="rounded-full p-2 text-slate-500 transition hover:bg-slate-200">
-            <X className="h-5 w-5" />
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-surface3 text-slate-400 hover:text-white transition-all">
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 p-6">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {error && (
-            <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-              <AlertCircle className="h-5 w-5 shrink-0" />
+            <div className="flex items-start gap-3 rounded-2xl border border-primary-red/20 bg-primary-red/10 p-4 text-xs font-semibold text-primary-red animate-in slide-in-from-top-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <p>{error}</p>
             </div>
           )}
 
           {success ? (
-            <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-              <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
-              <h4 className="text-xl font-bold text-emerald-900">Transfer submitted</h4>
-              <p className="text-sm text-emerald-700">Both ledgers have been updated atomically.</p>
+             <div className="space-y-4 py-6 text-center animate-in zoom-in-90">
+              <div className="w-16 h-16 bg-primary-green/10 rounded-full flex items-center justify-center mx-auto border border-primary-green/20">
+                <CheckCircle2 className="h-8 w-8 text-primary-green" />
+              </div>
+              <h4 className="font-head text-lg font-bold text-white">Transfer Successful</h4>
+              <p className="text-xs text-slate-400">Funds have been moved atomically between ledgers.</p>
             </div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">From</p>
-                  <p className="mt-1 text-base font-bold text-slate-900">
-                    #{sourceMerchant.id} - {sourceMerchant.name}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">Available: INR {(availableBalancePaise / 100).toFixed(2)}</p>
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* Source */}
+                <div className="p-5 rounded-2xl bg-surface2 border border-border-dim">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">From Source</p>
+                  <p className="text-sm font-bold text-white truncate">{sourceMerchant.name}</p>
+                  <p className="text-[10px] font-mono text-primary-green mt-1">Avail: ₹{(availableBalancePaise / 100).toLocaleString()}</p>
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">To merchant</label>
-                  <select
-                    value={destinationMerchantId ?? ''}
+
+                {/* Destination Select */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">To Destination</label>
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <select
+                      value={destinationMerchantId ?? ''}
+                      onChange={(event) => {
+                        setDestinationMerchantId(Number(event.target.value));
+                        idempotencyKeyRef.current = crypto.randomUUID();
+                      }}
+                      className="w-full h-full bg-surface2 border border-border-dim rounded-2xl pl-11 pr-4 py-3.5 text-xs font-bold text-white outline-none transition-all focus:border-primary-blue focus:bg-surface3 appearance-none cursor-pointer"
+                      required
+                    >
+                      {destinationCandidates.map((merchant) => (
+                        <option key={merchant.id} value={merchant.id} className="bg-surface text-white">
+                          {merchant.name} (MER_00{merchant.id})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600 text-xs">▼</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Transfer Amount</label>
+                <div className="relative group">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-sm font-bold text-slate-500">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={amountInr}
                     onChange={(event) => {
-                      setDestinationMerchantId(Number(event.target.value));
+                      setAmountInr(event.target.value);
                       idempotencyKeyRef.current = crypto.randomUUID();
                     }}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+                    placeholder="0.00"
+                    className="w-full h-14 bg-surface2 border border-border-dim rounded-2xl pl-10 pr-4 text-lg font-mono font-bold text-white outline-none transition-all focus:border-primary-blue focus:bg-surface3 placeholder:text-slate-700"
                     required
-                  >
-                    {destinationCandidates.map((merchant) => (
-                      <option key={merchant.id} value={merchant.id}>
-                        #{merchant.id} - {merchant.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Amount (INR)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={amountInr}
-                  onChange={(event) => {
-                    setAmountInr(event.target.value);
-                    idempotencyKeyRef.current = crypto.randomUUID();
-                  }}
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-semibold outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Note (optional)</label>
+              {/* Note */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Reference Note</label>
                 <input
                   type="text"
                   value={note}
@@ -166,8 +180,8 @@ export function TransferForm({
                     setNote(event.target.value);
                     idempotencyKeyRef.current = crypto.randomUUID();
                   }}
-                  placeholder="Invoice split, correction, vendor payout..."
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+                  placeholder="Split payment, fee reversal, etc."
+                  className="w-full h-12 bg-surface2 border border-border-dim rounded-2xl px-4 text-xs font-semibold text-white outline-none transition-all focus:border-primary-blue focus:bg-surface3 placeholder:text-slate-700"
                 />
               </div>
 
@@ -175,16 +189,16 @@ export function TransferForm({
                 type="submit"
                 disabled={loading}
                 className={cn(
-                  'flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3.5 text-base font-bold text-white transition hover:bg-slate-800',
-                  loading && 'cursor-not-allowed opacity-70'
+                  'flex w-full h-14 items-center justify-center gap-3 rounded-2xl bg-white text-bg text-sm font-bold transition-all shadow-lg shadow-white/5 hover:scale-[1.02] active:scale-[0.98]',
+                  loading && 'cursor-not-allowed opacity-50 grayscale'
                 )}
               >
                 {loading ? (
                   <RefreshCcw className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    <ArrowRightLeft className="h-5 w-5" />
-                    Transfer Funds
+                    <ArrowRightLeft className="h-4 w-4" />
+                    Execute Transfer
                   </>
                 )}
               </button>
