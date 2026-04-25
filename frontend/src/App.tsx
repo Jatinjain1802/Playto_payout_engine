@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PayoutForm } from './components/PayoutForm';
 import { TransferForm } from './components/TransferForm';
+import { PayoutHistoryModal } from './components/PayoutHistoryModal';
 import { payoutService } from './services/api';
 import type { Merchant, MerchantBalance, Payout, Transaction } from './types';
 import { cn, formatPaiseToINR } from './utils';
@@ -30,11 +31,14 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   const selectedMerchant = useMemo(
     () => merchants.find((merchant) => merchant.id === merchantId) ?? null,
     [merchants, merchantId]
   );
+
+  const recentPayouts = useMemo(() => payouts.slice(0, 7), [payouts]);
 
   const loadMerchants = useCallback(async () => {
     const merchantRows = await payoutService.getMerchants();
@@ -194,7 +198,7 @@ function App() {
         )}
 
         <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          <article className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
+          <article className="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold text-emerald-800">Available Balance</p>
               <ArrowDownLeft className="h-5 w-5 text-emerald-600" />
@@ -204,7 +208,7 @@ function App() {
             </p>
           </article>
 
-          <article className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm">
+          <article className="rounded-2xl border border-amber-200 bg-linear-to-br from-amber-50 to-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold text-amber-800">Held in Payouts</p>
               <Clock className="h-5 w-5 text-amber-600" />
@@ -214,7 +218,7 @@ function App() {
             </p>
           </article>
 
-          <article className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm">
+          <article className="rounded-2xl border border-sky-200 bg-linear-to-br from-sky-50 to-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-semibold text-sky-800">Total Credits</p>
               <ArrowUpRight className="h-5 w-5 text-sky-600" />
@@ -273,13 +277,23 @@ function App() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <header className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
-              <Clock className="h-5 w-5 text-slate-400" />
-              <h3 className="text-lg font-bold text-slate-900">Recent Payouts</h3>
+            <header className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-slate-400" />
+                <h3 className="text-lg font-bold text-slate-900">Recent Payouts</h3>
+              </div>
+              {payouts.length > 7 && (
+                <button
+                  onClick={() => setIsHistoryModalOpen(true)}
+                  className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 transition"
+                >
+                  Show All
+                </button>
+              )}
             </header>
             <div className="space-y-3 p-5">
-              {payouts.length > 0 ? (
-                payouts.map((payout) => (
+              {recentPayouts.length > 0 ? (
+                recentPayouts.map((payout) => (
                   <div key={payout.id} className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2">
@@ -322,6 +336,10 @@ function App() {
           onSuccess={() => void refreshAll()}
           onClose={() => setIsTransferModalOpen(false)}
         />
+      )}
+
+      {isHistoryModalOpen && (
+        <PayoutHistoryModal payouts={payouts} onClose={() => setIsHistoryModalOpen(false)} />
       )}
     </div>
   );
