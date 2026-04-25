@@ -121,12 +121,12 @@ function App() {
       <nav className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/90 px-6 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-slate-900 p-2 text-white">
+            <div className="rounded-xl bg-slate-900 p-2 text-white shadow-lg shadow-slate-200">
               <Wallet className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Playto</p>
-              <h1 className="text-lg font-black tracking-tight">Payout Control Center</h1>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Playto</p>
+              <h1 className="text-xl font-black tracking-tight text-slate-900">Payout Control Center</h1>
             </div>
           </div>
 
@@ -198,32 +198,32 @@ function App() {
         )}
 
         <section className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          <article className="rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 to-white p-5 shadow-sm">
+          <article className="rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50/50 to-white p-6 shadow-sm ring-1 ring-emerald-100/50">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-emerald-800">Available Balance</p>
+              <p className="text-xs font-black uppercase tracking-widest text-emerald-800/60">Available Balance</p>
               <ArrowDownLeft className="h-5 w-5 text-emerald-600" />
             </div>
-            <p className="text-3xl font-black tracking-tight text-emerald-900">
+            <p className="text-4xl font-black tracking-tighter text-emerald-900">
               {balance ? formatPaiseToINR(balance.available_balance_paise) : 'INR 0.00'}
             </p>
           </article>
 
-          <article className="rounded-2xl border border-amber-200 bg-linear-to-br from-amber-50 to-white p-5 shadow-sm">
+          <article className="rounded-2xl border border-amber-100 bg-linear-to-br from-amber-50/50 to-white p-6 shadow-sm ring-1 ring-amber-100/50">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-amber-800">Held in Payouts</p>
+              <p className="text-xs font-black uppercase tracking-widest text-amber-800/60">Held in Payouts</p>
               <Clock className="h-5 w-5 text-amber-600" />
             </div>
-            <p className="text-3xl font-black tracking-tight text-amber-900">
+            <p className="text-4xl font-black tracking-tighter text-amber-900">
               {balance ? formatPaiseToINR(balance.held_balance_paise) : 'INR 0.00'}
             </p>
           </article>
 
-          <article className="rounded-2xl border border-sky-200 bg-linear-to-br from-sky-50 to-white p-5 shadow-sm">
+          <article className="rounded-2xl border border-sky-100 bg-linear-to-br from-sky-50/50 to-white p-6 shadow-sm ring-1 ring-sky-100/50">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-sky-800">Total Credits</p>
+              <p className="text-xs font-black uppercase tracking-widest text-sky-800/60">Total Credits</p>
               <ArrowUpRight className="h-5 w-5 text-sky-600" />
             </div>
-            <p className="text-3xl font-black tracking-tight text-sky-900">
+            <p className="text-4xl font-black tracking-tighter text-sky-900">
               {balance ? formatPaiseToINR(balance.credits_total_paise) : 'INR 0.00'}
             </p>
           </article>
@@ -248,19 +248,34 @@ function App() {
                 <tbody>
                   {transactions.length > 0 ? (
                     transactions.map((transaction) => (
-                      <tr key={transaction.id} className="border-t border-slate-100">
-                        <td className="px-6 py-3 font-semibold text-slate-700">{transaction.reference_type}</td>
-                        <td className="px-6 py-3 font-mono text-xs text-slate-500">{transaction.reference_id || 'N/A'}</td>
-                        <td
-                          className={cn(
-                            'px-6 py-3 font-bold',
-                            transaction.direction === 'credit' ? 'text-emerald-600' : 'text-slate-800'
-                          )}
-                        >
-                          {transaction.direction === 'credit' ? '+' : '-'} {formatPaiseToINR(transaction.amount_paise)}
+                      <tr key={transaction.id} className="group border-t border-slate-50 transition-colors hover:bg-slate-50/50">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                              transaction.direction === 'credit' ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"
+                            )}>
+                              {transaction.reference_type}
+                            </span>
+                          </div>
                         </td>
-                        <td className="px-6 py-3 text-xs text-slate-500">
-                          {new Date(transaction.created_at).toLocaleString()}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+                            <span>{transaction.reference_id ? `${transaction.reference_id.slice(0, 8)}...` : 'N/A'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={cn(
+                              'font-bold tracking-tight',
+                              transaction.direction === 'credit' ? 'text-emerald-600' : 'text-slate-900'
+                            )}
+                          >
+                            {transaction.direction === 'credit' ? '+' : '-'} {formatPaiseToINR(transaction.amount_paise)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-xs font-medium text-slate-400">
+                          {new Date(transaction.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                         </td>
                       </tr>
                     ))
@@ -294,20 +309,27 @@ function App() {
             <div className="space-y-3 p-5">
               {recentPayouts.length > 0 ? (
                 recentPayouts.map((payout) => (
-                  <div key={payout.id} className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {payout.status === 'completed' && <CheckCircle2 className="h-5 w-5 text-emerald-600" />}
-                        {payout.status === 'failed' && <XCircle className="h-5 w-5 text-rose-600" />}
-                        {(payout.status === 'pending' || payout.status === 'processing') && (
-                          <Clock className="h-5 w-5 animate-pulse text-amber-600" />
-                        )}
+                  <div key={payout.id} className="group relative rounded-xl border border-slate-100 bg-white p-3.5 transition-all hover:border-slate-200 hover:shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "rounded-lg p-2",
+                          payout.status === 'completed' && "bg-emerald-50 text-emerald-600",
+                          payout.status === 'failed' && "bg-rose-50 text-rose-600",
+                          (payout.status === 'pending' || payout.status === 'processing') && "bg-amber-50 text-amber-600"
+                        )}>
+                          {payout.status === 'completed' && <CheckCircle2 className="h-4 w-4" />}
+                          {payout.status === 'failed' && <XCircle className="h-4 w-4" />}
+                          {(payout.status === 'pending' || payout.status === 'processing') && <Clock className="h-4 w-4 animate-pulse" />}
+                        </div>
                         <div>
-                          <p className="font-bold text-slate-900">{formatPaiseToINR(payout.amount_paise)}</p>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{payout.status}</p>
+                          <p className="text-sm font-bold tracking-tight text-slate-900">{formatPaiseToINR(payout.amount_paise)}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{payout.status}</p>
                         </div>
                       </div>
-                      <p className="text-xs text-slate-400">{new Date(payout.created_at).toLocaleDateString()}</p>
+                      <span className="text-[10px] font-medium text-slate-400">
+                        {new Date(payout.created_at).toLocaleDateString([], { month: 'numeric', day: 'numeric', year: 'numeric' })}
+                      </span>
                     </div>
                   </div>
                 ))

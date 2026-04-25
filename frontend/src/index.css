@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+/* Fonts imported in index.html */
 @import "tailwindcss";
 
 @theme {
@@ -93,9 +93,17 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "Manrope", "Segoe UI", "Helvetica Neue", sans-serif;
+    font-family: "Manrope", sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     text-rendering: geometricPrecision;
     -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Syne", sans-serif;
+  }
+
+  button, select, input, .font-ui {
+    font-family: "Outfit", sans-serif;
   }
 }
