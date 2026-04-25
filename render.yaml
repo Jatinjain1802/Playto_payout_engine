@@ -7,6 +7,7 @@ services:
   - type: keyvalue
     name: playto-redis
     plan: free
+    ipAllowList: []
 
   # 1. Backend API (Django)
   - type: web
