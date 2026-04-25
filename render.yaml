@@ -1,10 +1,10 @@
-services:
-  # 1. PostgreSQL Database
-  - type: database
-    name: playto-db
+databases:
+  - name: playto-db
     databaseName: playto
     user: playto
     plan: free
+
+services:
 
   # 2. Redis Instance (for Celery)
   - type: redis
