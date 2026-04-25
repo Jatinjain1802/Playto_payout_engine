@@ -32,3 +32,26 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.merchant.name} | {self.direction} | {self.amount_paise}"
+
+class AuditLog(models.Model):
+    class Action(models.TextChoices):
+        CREATE = 'create', 'Create'
+        UPDATE = 'update', 'Update'
+        DELETE = 'delete', 'Delete'
+
+    timestamp = models.DateTimeField(auto_now_add=True)
+    actor_email = models.CharField(max_length=255, blank=True, null=True) # Who did it
+    action = models.CharField(max_length=10, choices=Action.choices)
+    target_model = models.CharField(max_length=100) # e.g. "BankAccount"
+    target_id = models.CharField(max_length=100)
+    changes = models.JSONField() # Store old vs new values
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['target_model', 'target_id']),
+            models.Index(fields=['timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.action} on {self.target_model}:{self.target_id} at {self.timestamp}"
