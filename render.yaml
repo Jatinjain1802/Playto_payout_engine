@@ -2,32 +2,28 @@ databases:
   - name: playto-db
     plan: free
 
-services:
-  # 0. Redis (Key Value Store - Free)
-  - type: keyvalue
-    name: playto-redis
+keyValues:
+  - name: playto-redis
     plan: free
 
-  # 1. Backend + Worker + Beat (Combined as one Web Service - Free)
+services:
   - type: web
     name: playto-backend
     env: python
     rootDir: backend
     buildCommand: "./render_build.sh"
-    startCommand: "./start_all.sh" # Ek script jo sab kuch start karegi
+    startCommand: "./start_all.sh"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: playto-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromService:
-          type: keyvalue
+        fromKeyValue:
           name: playto-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: keyvalue
+        fromKeyValue:
           name: playto-redis
           property: connectionString
       - key: DJANGO_SECRET_KEY
@@ -37,7 +33,6 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: "*"
 
-  # 2. Frontend (Static Site - Free)
   - type: web
     name: playto-frontend
     env: static
