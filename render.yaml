@@ -2,11 +2,11 @@ databases:
   - name: playto-db
     plan: free
 
-keyValues:
-  - name: playto-redis
+services:
+  - type: redis
+    name: playto-redis
     plan: free
 
-services:
   - type: web
     name: playto-backend
     env: python
@@ -19,11 +19,13 @@ services:
           name: playto-db
           property: connectionString
       - key: CELERY_BROKER_URL
-        fromKeyValue:
+        fromService:
+          type: redis
           name: playto-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
-        fromKeyValue:
+        fromService:
+          type: redis
           name: playto-redis
           property: connectionString
       - key: DJANGO_SECRET_KEY
