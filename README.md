@@ -9,6 +9,16 @@ A high-integrity, production-grade payout engine designed to handle merchant led
 
 ---
 
+## 🌐 Live Demo
+
+- **Frontend Dashboard:** [https://playto-frontend-u3fo.onrender.com/](https://playto-frontend-u3fo.onrender.com/)
+- **Backend API:** [https://playto-payout-engine.onrender.com](https://playto-payout-engine.onrender.com)
+- **Django Admin Panel:** [https://playto-payout-engine.onrender.com/admin](https://playto-payout-engine.onrender.com/admin)
+  - **Username:** `admin`
+  - **Password:** `test@2405`
+
+---
+
 ## 🚀 Core Engineering Philosophy
 
 This is not just a CRUD application. It is a **financial ledger system** built on three pillars:
@@ -53,13 +63,23 @@ This is not just a CRUD application. It is a **financial ledger system** built o
 - Python 3.10+
 - Node.js 18+
 - Redis (Optional, falls back to `Always-Sync` for simple testing)
+- PostgreSQL (Optional, if you want to test database locking locally. Otherwise uses SQLite)
 
-### 1. Automatic Setup (Recommended)
+### 1. Automatic Setup (Recommended for SQLite)
 We've included a PowerShell script to boot everything at once.
 ```powershell
 # From the root directory
 powershell -ExecutionPolicy Bypass -File .\start-all.ps1
 ```
+
+### 1.5. Running Locally with PostgreSQL (Optional)
+If you want to use PostgreSQL locally instead of SQLite (to test concurrency):
+1. Install PostgreSQL and create a database (e.g., `playto_db`).
+2. Create a `backend/.env` file and add your connection string:
+   ```env
+   DATABASE_URL=postgres://postgres:yourpassword@localhost:5432/playto_db
+   ```
+3. Proceed with the manual setup steps below.
 
 ### 2. Manual Setup
 **Backend:**

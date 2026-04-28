@@ -11,10 +11,12 @@ import {
   Send,
   Wallet,
   XCircle,
+  Eye,
 } from 'lucide-react';
 import { PayoutForm } from './components/PayoutForm';
 import { TransferForm } from './components/TransferForm';
 import { PayoutHistoryModal } from './components/PayoutHistoryModal';
+import { CreditLogsModal } from './components/CreditLogsModal';
 import { payoutService } from './services/api';
 import type { Merchant, MerchantBalance, Payout, Transaction } from './types';
 import { cn, formatPaiseToINR } from './utils';
@@ -32,6 +34,7 @@ function App() {
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isCreditLogsModalOpen, setIsCreditLogsModalOpen] = useState(false);
 
   const selectedMerchant = useMemo(
     () => merchants.find((merchant) => merchant.id === merchantId) ?? null,
@@ -231,9 +234,32 @@ function App() {
 
         <section className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-            <header className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
-              <History className="h-5 w-5 text-slate-400" />
-              <h3 className="text-lg font-bold text-slate-900">Ledger Transactions</h3>
+            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5 text-slate-400" />
+                <h3 className="text-lg font-bold text-slate-900">Ledger Transactions</h3>
+              </div>
+              
+              {balance && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 border border-rose-100 ring-1 ring-rose-500/10">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600">Total Debit</span>
+                    <span className="text-sm font-black text-rose-700">{formatPaiseToINR(balance.debits_total_paise)}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 pl-3 pr-1 py-1 border border-emerald-100 ring-1 ring-emerald-500/10">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Total Credit</span>
+                    <span className="text-sm font-black text-emerald-700">{formatPaiseToINR(balance.credits_total_paise)}</span>
+                    <button
+                      onClick={() => setIsCreditLogsModalOpen(true)}
+                      className="ml-1 rounded-full p-1 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-800 transition shadow-sm"
+                      title="View Past Credit Logs"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </header>
             <div className="max-h-[460px] overflow-auto">
               <table className="w-full text-left text-sm">
@@ -362,6 +388,10 @@ function App() {
 
       {isHistoryModalOpen && (
         <PayoutHistoryModal payouts={payouts} onClose={() => setIsHistoryModalOpen(false)} />
+      )}
+
+      {isCreditLogsModalOpen && (
+        <CreditLogsModal transactions={transactions} onClose={() => setIsCreditLogsModalOpen(false)} />
       )}
     </div>
   );
