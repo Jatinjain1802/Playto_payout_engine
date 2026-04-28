@@ -17,8 +17,9 @@ import { PayoutForm } from './components/PayoutForm';
 import { TransferForm } from './components/TransferForm';
 import { PayoutHistoryModal } from './components/PayoutHistoryModal';
 import { CreditLogsModal } from './components/CreditLogsModal';
+import { TransactionDetailsModal } from './components/TransactionDetailsModal';
 import { payoutService } from './services/api';
-import type { Merchant, MerchantBalance, Payout, Transaction } from './types';
+import type { Merchant, MerchantBalance, Payout, Transaction, BankAccount } from './types';
 import { cn, formatPaiseToINR } from './utils';
 
 const AUTO_REFRESH_MS = 3000;
@@ -29,12 +30,14 @@ function App() {
   const [balance, setBalance] = useState<MerchantBalance | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isCreditLogsModalOpen, setIsCreditLogsModalOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
   const selectedMerchant = useMemo(
     () => merchants.find((merchant) => merchant.id === merchantId) ?? null,
@@ -69,15 +72,17 @@ function App() {
         if (!silent) {
           setLoading(true);
         }
-        const [balanceData, transactionRows, payoutRows] = await Promise.all([
+        const [balanceData, transactionRows, payoutRows, bankAccountsData] = await Promise.all([
           payoutService.getMerchantBalance(merchantId),
           payoutService.getMerchantTransactions(merchantId),
           payoutService.getMerchantPayouts(merchantId),
+          payoutService.getMerchantBankAccounts(merchantId),
         ]);
 
         setBalance(balanceData);
         setTransactions(transactionRows);
         setPayouts(payoutRows);
+        setBankAccounts(bankAccountsData);
         setError(null);
       } catch (fetchError) {
         console.error('Failed to fetch dashboard:', fetchError);
@@ -266,9 +271,10 @@ function App() {
                 <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
                   <tr>
                     <th className="px-6 py-3 font-semibold">Type</th>
-                    <th className="px-6 py-3 font-semibold">Reference</th>
+                    <th className="px-6 py-3 font-semibold">Details</th>
                     <th className="px-6 py-3 font-semibold">Amount</th>
                     <th className="px-6 py-3 font-semibold">Date</th>
+                    <th className="px-6 py-3 font-semibold text-right">View</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,8 +292,15 @@ function App() {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
-                            <span>{transaction.reference_id ? `${transaction.reference_id.slice(0, 8)}...` : 'N/A'}</span>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs font-semibold text-slate-700 line-clamp-2">
+                              {transaction.description || 'System Transaction'}
+                            </span>
+                            {transaction.reference_id && (
+                              <span className="font-mono text-[10px] text-slate-400">
+                                Ref: {transaction.reference_id.slice(0, 8)}...
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -302,6 +315,15 @@ function App() {
                         </td>
                         <td className="px-6 py-4 text-xs font-medium text-slate-400">
                           {new Date(transaction.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => setSelectedTransaction(transaction)}
+                            className="inline-flex rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -323,12 +345,12 @@ function App() {
                 <Clock className="h-5 w-5 text-slate-400" />
                 <h3 className="text-lg font-bold text-slate-900">Recent Payouts</h3>
               </div>
-              {payouts.length > 7 && (
+              {payouts.length > 0 && (
                 <button
                   onClick={() => setIsHistoryModalOpen(true)}
                   className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 transition"
                 >
-                  Show All
+                  Show All / Filter
                 </button>
               )}
             </header>
@@ -387,11 +409,20 @@ function App() {
       )}
 
       {isHistoryModalOpen && (
-        <PayoutHistoryModal payouts={payouts} onClose={() => setIsHistoryModalOpen(false)} />
+        <PayoutHistoryModal payouts={payouts} bankAccounts={bankAccounts} onClose={() => setIsHistoryModalOpen(false)} />
       )}
 
       {isCreditLogsModalOpen && (
         <CreditLogsModal transactions={transactions} onClose={() => setIsCreditLogsModalOpen(false)} />
+      )}
+
+      {selectedTransaction && (
+        <TransactionDetailsModal
+          transaction={selectedTransaction}
+          payouts={payouts}
+          bankAccounts={bankAccounts}
+          onClose={() => setSelectedTransaction(null)}
+        />
       )}
     </div>
   );

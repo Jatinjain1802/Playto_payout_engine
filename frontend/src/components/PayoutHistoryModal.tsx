@@ -1,25 +1,28 @@
 import { X, Clock, CheckCircle2, XCircle, Search, Filter } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import type { Payout } from '../types';
+import type { Payout, BankAccount } from '../types';
 import { formatPaiseToINR, cn } from '../utils';
 
 interface PayoutHistoryModalProps {
   payouts: Payout[];
+  bankAccounts: BankAccount[];
   onClose: () => void;
 }
 
-export function PayoutHistoryModal({ payouts, onClose }: PayoutHistoryModalProps) {
+export function PayoutHistoryModal({ payouts, bankAccounts, onClose }: PayoutHistoryModalProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [accountFilter, setAccountFilter] = useState<string>('all');
 
   const filteredPayouts = useMemo(() => {
     return payouts.filter((payout) => {
       const matchesSearch = payout.id.toString().includes(search) || 
                            (payout.amount_paise / 100).toString().includes(search);
       const matchesStatus = statusFilter === 'all' || payout.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesAccount = accountFilter === 'all' || payout.bank_account_id.toString() === accountFilter;
+      return matchesSearch && matchesStatus && matchesAccount;
     });
-  }, [payouts, search, statusFilter]);
+  }, [payouts, search, statusFilter, accountFilter]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
@@ -63,6 +66,21 @@ export function PayoutHistoryModal({ payouts, onClose }: PayoutHistoryModalProps
               <option value="processing">Processing</option>
               <option value="completed">Completed</option>
               <option value="failed">Failed</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={accountFilter}
+              onChange={(e) => setAccountFilter(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-slate-900/5 max-w-[200px] truncate"
+            >
+              <option value="all">All Accounts</option>
+              {bankAccounts.map(account => (
+                <option key={account.id} value={account.id}>
+                  A/C ending in {account.account_number.slice(-4)}
+                </option>
+              ))}
             </select>
           </div>
           

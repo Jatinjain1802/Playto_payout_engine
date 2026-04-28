@@ -18,9 +18,11 @@ export function CreditLogsModal({ transactions, onClose }: CreditLogsModalProps)
 
   const filteredCredits = useMemo(() => {
     return creditTransactions.filter((tx) => {
-      return tx.reference_id.toLowerCase().includes(search.toLowerCase()) || 
+      const searchLower = search.toLowerCase();
+      return (tx.reference_id && tx.reference_id.toLowerCase().includes(searchLower)) || 
+             (tx.description && tx.description.toLowerCase().includes(searchLower)) ||
              (tx.amount_paise / 100).toString().includes(search) ||
-             tx.reference_type.toLowerCase().includes(search.toLowerCase());
+             tx.reference_type.toLowerCase().includes(searchLower);
     });
   }, [creditTransactions, search]);
 
@@ -81,9 +83,18 @@ export function CreditLogsModal({ transactions, onClose }: CreditLogsModalProps)
                       {tx.reference_type}
                     </span>
                   </div>
-                  <div className="mt-2 border-t border-slate-100 pt-2">
-                    <p className="text-xs font-mono text-slate-500 break-all">Ref: {tx.reference_id}</p>
-                    <p className="mt-1 text-xs text-slate-400">{new Date(tx.created_at).toLocaleString()}</p>
+                  <div className="mt-3 border-t border-emerald-100/50 pt-3">
+                    <p className="text-sm font-medium text-slate-700 leading-snug">
+                      {tx.description || 'Manual Admin Credit / System Transfer'}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between">
+                      <p className="text-xs text-slate-400">{new Date(tx.created_at).toLocaleString()}</p>
+                      {tx.reference_id && (
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                          Ref: {tx.reference_id.slice(0, 8)}...
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
