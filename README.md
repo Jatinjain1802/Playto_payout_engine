@@ -40,10 +40,146 @@ This is not just a CRUD application. It is a **financial ledger system** built o
 
 ---
 
+---
+
 ## 🏗 System Architecture
 
-![System Flow](./system_flow.png)
-*Visualizing the flow from Request -> Ledger Lock -> Background Worker -> Bank Simulation.*
+The Playto Payout Engine follows a robust asynchronous architecture designed for high availability and data consistency.
+
+### 🗺 High-Level Architecture
+```mermaid
+graph TD
+    Client[React Dashboard] -- REST API --> Django[Django Backend]
+    Django -- Write/Read --> PG[(PostgreSQL)]
+    Django -- Enqueue Task --> Redis((Redis))
+    Redis -- Fetch Task --> Celery[Celery Worker]
+    Celery -- Simulate Bank API --> Bank((External Bank))
+    Celery -- Update Status --> PG
+```
+
+### 🔁 Payout Sequence Diagram
+This diagram illustrates the lifecycle of a payout request, including row-locking and idempotency checks.
+
+```mermaid
+sequenceDiagram
+    participant C as Client (Dashboard)
+    participant A as API (Django)
+    participant DB as Database (Postgres)
+    participant W as Worker (Celery)
+
+    C->>A: POST /payouts/ (Amount, Idempotency-Key)
+    A->>DB: SELECT ... FOR UPDATE (Lock Merchant Row)
+    A->>DB: Check Idempotency Record
+    alt Key Exists
+        A-->>C: Return 409 Conflict / Stored Response
+    else New Key
+        A->>DB: Calculate Ledger Balance (Sum Credits - Debits)
+        alt Insufficient Balance
+            A-->>C: Return 400 Insufficient Funds
+        else Sufficient Balance
+            A->>DB: Create Payout (PENDING)
+            A->>DB: Insert Debit Transaction (Held)
+            A->>A: Trigger Background Task
+            A-->>C: Return 201 Created (Payout ID)
+        end
+    end
+    Note over A,DB: Transaction Committed (Lock Released)
+
+    W->>DB: Fetch Payout & Update to PROCESSING
+    W->>W: Simulate External Bank API Call
+    alt Success
+        W->>DB: Update Payout to COMPLETED
+    else Failure
+        W->>DB: Update Payout to FAILED
+        W->>DB: Insert Credit Transaction (Refund)
+    end
+```
+
+### 🌊 System Flow
+The following flow ensures that money is never lost or double-spent:
+
+1.  **Request Capture:** Idempotency key is validated to prevent duplicate processing.
+2.  **Ledger Lock:** The merchant's row is locked in the database to prevent concurrent balance checks from overlapping.
+3.  **Balance Check:** Current balance is computed via the ledger (`SUM(credits) - SUM(debits)`).
+4.  **Atomic Debit:** A `DEBIT` transaction is recorded, and the payout is saved in `PENDING` state.
+5.  **Async Processing:** Celery picks up the payout and interacts with the bank simulation.
+6.  **Final Settlement:** The status is updated to `COMPLETED` or `FAILED` (triggering an automatic refund).
+
+---
+
+---
+
+## 📊 Database Schema (ER Diagram)
+
+The system is designed with a strict relational model to ensure data integrity. The **Ledger** (Transactions) and **Payouts** are decoupled but linked via reference IDs.
+
+```mermaid
+erDiagram
+    MERCHANT ||--o{ BANK_ACCOUNT : owns
+    MERCHANT ||--o{ TRANSACTION : has
+    MERCHANT ||--o{ PAYOUT : initiates
+    MERCHANT ||--o{ IDEMPOTENCY_RECORD : tracks
+    
+    PAYOUT ||--o| TRANSACTION : triggers_debit
+    PAYOUT ||--o| IDEMPOTENCY_RECORD : associated_with
+
+    TRANSACTION {
+        string direction "credit | debit"
+        bigint amount_paise
+        string reference_type "payout | transfer | refund"
+    }
+
+    PAYOUT {
+        uuid id PK
+        string status "pending | processing | completed | failed"
+        uuid idempotency_key
+    }
+    
+    IDEMPOTENCY_RECORD {
+        uuid key PK
+        string request_fingerprint
+        json response_body
+    }
+```
+
+---
+
+## 🖼 Visual Gallery
+*Static versions of the system diagrams.*
+
+| Architecture | System Flow | Sequence Diagram |
+| :--- | :--- | :--- |
+| ![Architecture](./Architecture_Diagram.png) | ![Flow](./system_flow.png) | ![Sequence](./sequence_image.png) |
+
+---
+
+## ⚛️ Frontend Architecture (React)
+
+The dashboard is built with **React 18** and **Vite**, focusing on real-time feedback and robust state management.
+
+-   **State Management:** Uses React `useState` and `useEffect` for polling payout statuses.
+-   **Service Layer:** Centralized API calls in `services/api.ts` with typed responses.
+-   **UX/UI:** Tailwind CSS for a clean, responsive layout with **Lucide Icons** for status visualization.
+-   **Idempotency Handling:** The frontend generates a unique UUID for every payout attempt, ensuring that even if the "Submit" button is clicked multiple times, only one payout is processed.
+
+---
+
+## 🎓 Engineering Deep Dive (Learning Points)
+
+### 1. Why Append-Only Ledger?
+In financial systems, you **never** do `UPDATE accounts SET balance = balance - 100`. Why? Because if that update fails or if someone asks "where did my money go?", you have no audit trail.
+Instead, we use a **Ledger**:
+- To decrease balance: Insert a `DEBIT` row.
+- To increase balance: Insert a `CREDIT` row.
+- **Result:** Balance is the `SUM(credits) - SUM(debits)`. This is immutable and auditable.
+
+### 2. The Power of `SELECT FOR UPDATE`
+In a high-concurrency environment (e.g., a merchant has 5 employees all trying to withdraw money at once), two requests might see a $100 balance and both try to withdraw $100.
+Using `select_for_update()`, the first request "locks" the merchant row. The second request **waits** until the first one is finished. This prevents **Double Spending**.
+
+### 3. Idempotency vs. Duplicates
+An API is **Idempotent** if making the same call multiple times has the same effect as making it once.
+We achieve this by storing the `Idempotency-Key` and a **Fingerprint** (hash of the request body). If a retry comes in with the same key but different data (e.g., different amount), we reject it as a conflict.
 
 ---
 
